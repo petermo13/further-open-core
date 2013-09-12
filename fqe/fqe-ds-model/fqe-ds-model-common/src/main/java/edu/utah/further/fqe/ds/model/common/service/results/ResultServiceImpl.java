@@ -15,11 +15,16 @@
  */
 package edu.utah.further.fqe.ds.model.common.service.results;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.SimpleJdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import edu.utah.further.core.api.exception.ApplicationException;
 import edu.utah.further.core.query.domain.SearchQuery;
 import edu.utah.further.fqe.ds.api.service.results.ResultService;
 import edu.utah.further.fqe.ds.api.service.results.ResultType;
@@ -42,6 +47,12 @@ import edu.utah.further.fqe.ds.api.service.results.ResultType;
 public class ResultServiceImpl implements ResultService
 {
 
+	/**
+	 * 
+	 */
+	@Autowired
+	private SimpleJdbcTemplate jdbcTemplate;
+
 	/*
 	 * (non-Javadoc)
 	 * 
@@ -52,8 +63,55 @@ public class ResultServiceImpl implements ResultService
 	public Long join(final List<String> queryIds, final ResultType resultType,
 			final Integer intersectionIndex)
 	{
-		// TODO Auto-generated method stub
-		return null;
+		if (queryIds == null || queryIds.size() == 0)
+		{
+			throw new ApplicationException("Missing query identifiers");
+		}
+
+		long result = 0;
+
+		switch (resultType)
+		{
+			case SUM:
+			{
+				result = jdbcTemplate.queryForLong(
+						"SELECT COUNT(*) FROM virtual_obj_id_map WHERE query_id IN :ids",
+						Collections.singletonMap("ids", queryIds));
+				break;
+			}
+
+			case INTERSECTION:
+			{
+				if (intersectionIndex == null)
+				{
+					throw new ApplicationException(
+							"Missing parameter to intersect queries");
+				}
+
+				if (intersectionIndex.intValue() == 1)
+				{
+					result = jdbcTemplate.queryForLong(
+							"SELECT COUNT(distinct fed_obj_id) "
+									+ "FROM virtual_obj_id_map WHERE query_id IN :ids",
+							Collections.singletonMap("ids", queryIds));
+					break;
+				}
+
+				final Map<String, Object> args = new HashMap<>();
+				args.put("ids", queryIds);
+				args.put("intersectionIndex", intersectionIndex);
+				result = jdbcTemplate.queryForLong(
+						"SELECT COUNT(fed_obj_id) FROM virtual_obj_id_map "
+								+ "WHERE query_id IN :ids GROUP BY fed_obj_id "
+								+ "HAVING COUNT(fed_obj_id) >= :intersectionIndex", args);
+
+			}
+
+			default:
+				throw new ApplicationException("Unknown result type: " + resultType);
+		}
+
+		return new Long(result);
 	}
 
 	/*
@@ -63,8 +121,9 @@ public class ResultServiceImpl implements ResultService
 	 * java.lang.String, edu.utah.further.fqe.ds.api.results.ResultType, int)
 	 */
 	@Override
-	public Map<String, Long> join(final List<String> queryIds, final String attributeName,
-			final ResultType resultType, final int intersectionIndex)
+	public Map<String, Long> join(final List<String> queryIds,
+			final String attributeName, final ResultType resultType,
+			final int intersectionIndex)
 	{
 		// TODO Auto-generated method stub
 		return null;
@@ -109,6 +168,27 @@ public class ResultServiceImpl implements ResultService
 	{
 		// TODO Auto-generated method stub
 		return null;
+	}
+
+	/**
+	 * Return the jdbcTemplate property.
+	 * 
+	 * @return the jdbcTemplate
+	 */
+	public SimpleJdbcTemplate getJdbcTemplate()
+	{
+		return jdbcTemplate;
+	}
+
+	/**
+	 * Set a new value for the jdbcTemplate property.
+	 * 
+	 * @param jdbcTemplate
+	 *            the jdbcTemplate to set
+	 */
+	public void setJdbcTemplate(final SimpleJdbcTemplate jdbcTemplate)
+	{
+		this.jdbcTemplate = jdbcTemplate;
 	}
 
 }
